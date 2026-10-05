@@ -9,7 +9,7 @@
 # Bez domeny używa adresu <IP-z-myślnikami>.sslip.io. Można uruchamiać ponownie (aktualizacja).
 set -euo pipefail
 
-REPO="https://github.com/Sevenek0/S7-monitor.git"
+REPO="${S7_REPO:-https://github.com/Sevenek0/S7-monitor.git}"
 BRANCH="${S7_BRANCH:-feat/s7-monitor}"
 DIR="/opt/s7-monitor"
 
@@ -100,7 +100,7 @@ fi
 # --- 4. Uruchomienie aplikacji ---------------------------------------------
 mkdir -p data
 c_info "Buduję i uruchamiam kontener (pierwszy raz ok. 1–3 min)…"
-docker compose up -d --build app >/dev/null
+if [ -n "${S7_SKIP_BUILD:-}" ]; then docker compose up -d app >/dev/null; else docker compose up -d --build app >/dev/null; fi
 for _ in $(seq 1 30); do
   curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 && break
   sleep 2
