@@ -17,6 +17,7 @@ import { createServices } from '../src/services.js';
 import { startFivemMock } from './fivem-mock.js';
 import { startPteroMock } from './ptero-mock.js';
 import { startSiteMock } from './site-mock.js';
+import { startAgentMock } from './agent-mock.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = process.env.DATA_DIR || path.join(ROOT, '.dev-data');
@@ -26,6 +27,7 @@ if (fresh) fs.rmSync(dataDir, { recursive: true, force: true });
 const fivem = await startFivemMock({ port: Number(process.env.MOCK_FIVEM_PORT || 30121), players: 23, maxClients: 64 });
 const ptero = await startPteroMock({ port: Number(process.env.MOCK_PTERO_PORT || 8090) });
 const site = await startSiteMock({ port: Number(process.env.MOCK_SITE_PORT || 8091) });
+const agent = await startAgentMock({ port: Number(process.env.MOCK_AGENT_PORT || 8092) });
 
 const config = createConfig({
   ...process.env,
@@ -33,6 +35,7 @@ const config = createConfig({
   APP_PASSWORD: process.env.APP_PASSWORD || 'admin',
   PTERO_URL: ptero.url,
   PTERO_KEY: ptero.key,
+  S7_AGENT_URL: agent.url,
   PORT: process.env.PORT || '3000',
 });
 
@@ -49,6 +52,7 @@ function seed() {
     { name: 'Bot EMS', type: 'pterodactyl', pteroServerId: 'a1b2c3d4' },
     { name: 'Bot Policja', type: 'pterodactyl', pteroServerId: 'e5f6a7b8' },
     { name: 'Bot Ekonomia', type: 'pterodactyl', pteroServerId: 'c9d0e1f2' },
+    { name: 'Community Bot', type: 'service', target: 'community-bot' },
     { name: 'Strona S7', type: 'http', target: `${site.url}/`, keyword: 'Witaj' },
     { name: 'Panel sklepu', type: 'http', target: `${site.url}/redirect` },
     { name: 'Wiki serwera', type: 'http', target: `${site.url}/error` },
@@ -66,8 +70,8 @@ function seed() {
     [monitors[0].id]: [[now - 3 * 24 * 3600e3, 18 * 60e3, 'timeout'], [now - 9 * 3600e3, 6 * 60e3, 'połączenie odrzucone']],
     [monitors[1].id]: [[now - 12 * 24 * 3600e3, 45 * 60e3, 'wyłączony'], [now - 5 * 3600e3, 4 * 60e3, 'wyłączony']],
     [monitors[3].id]: [[now - 2 * 3600e3, 2 * 3600e3, 'wyłączony']],
-    [monitors[4].id]: [[now - 6 * 24 * 3600e3, 12 * 60e3, 'HTTP 502']],
-    [monitors[6].id]: [[now - 40 * 60e3, 40 * 60e3, 'HTTP 500']],
+    [monitors[5].id]: [[now - 6 * 24 * 3600e3, 12 * 60e3, 'HTTP 502']],
+    [monitors[7].id]: [[now - 40 * 60e3, 40 * 60e3, 'HTTP 500']],
   };
   db.transaction(() => {
     for (const m of monitors) {
@@ -80,7 +84,7 @@ function seed() {
         if (m.type === 'fivem') {
           const pl = Math.round(4 + wave * 50 + rnd() * 6);
           ins.run(m.id, ts, down ? 0 : 1, down ? null : Math.round(25 + rnd() * 30), down ? null : pl, down ? null : 40 + pl * 1.2 + rnd() * 10, down ? null : Math.round((3.4 + pl * 0.02) * 1e9));
-        } else if (m.type === 'pterodactyl') {
+        } else if (m.type === 'pterodactyl' || m.type === 'service') {
           ins.run(m.id, ts, down ? 0 : 1, down ? null : Math.round(60 + rnd() * 40), null, down ? null : 2 + wave * 6 + rnd() * 3, down ? null : Math.round((120 + wave * 60 + rnd() * 20) * 1e6));
         } else {
           ins.run(m.id, ts, down ? 0 : 1, down ? null : Math.round(80 + wave * 120 + rnd() * 60 + (rnd() > 0.98 ? 600 : 0)), null, null, null);
@@ -105,6 +109,7 @@ svc.app.listen(config.port, '0.0.0.0', () => {
     row(`Mock FiveM:        ${fivem.url}`),
     row(`Mock Pterodactyl:  ${ptero.url}`),
     row(`Mock strona:       ${site.url}`),
+    row(`Mock agent VPS:    ${agent.url}`),
     `  └${'─'.repeat(W)}┘`,
     `  Symulacja awarii FiveM:  curl "${fivem.url}/__control?online=0"`,
     `  Powrót:                  curl "${fivem.url}/__control?online=1"`,

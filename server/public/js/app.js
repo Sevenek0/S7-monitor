@@ -1,10 +1,11 @@
 // Punkt wejścia PWA: routing, logowanie, odświeżanie widoków, most do aplikacji desktop.
 import { auth, login, setUnauthorizedHandler } from './api.js';
-import { subscribe, loadAll, loadMe, connectLive, disconnectLive, summary } from './store.js';
+import { state, subscribe, loadAll, loadMe, connectLive, disconnectLive, summary } from './store.js';
 import { $, icon, toast } from './util.js';
 import { renderDashboard } from './dashboard.js';
 import { openDetail, closeDetail } from './detail.js';
 import { renderSettings, refreshSettingsList } from './settings.js';
+import { renderServer, closeServer } from './server.js';
 import { initDesktopBridge } from './desktop-bridge.js';
 
 const view = $('#view');
@@ -18,6 +19,7 @@ function parseRoute() {
   const m = path.match(/^\/m\/(\d+)/);
   if (path === '/login') return { name: 'login', params };
   if (path === '/settings') return { name: 'settings', params };
+  if (path === '/server') return { name: 'server', params };
   if (m) return { name: 'detail', id: Number(m[1]), params };
   return { name: 'dashboard', params };
 }
@@ -32,11 +34,16 @@ function setNav(name) {
 function render() {
   route = parseRoute();
   if (!auth.token && route.name !== 'login') { location.replace('#/login'); return; }
-  if (route.name === 'login') { closeDetail(); renderLogin(); return; }
+  if (route.name === 'login') { closeDetail(); closeServer(); renderLogin(); return; }
   if (!started) { start().then(render, () => {}); }
   topbar.classList.remove('hidden');
   setNav(route.name);
-  if (route.name === 'settings') {
+  if (route.name !== 'server') closeServer();
+  if (route.name === 'server') {
+    closeDetail();
+    document.title = 'Serwer · S7 Monitor';
+    renderServer(view, route.params);
+  } else if (route.name === 'settings') {
     closeDetail();
     document.title = 'Ustawienia · S7 Monitor';
     renderSettings(view, route.params);
@@ -48,7 +55,7 @@ function render() {
 }
 
 function updateTitle() {
-  if (route.name === 'settings' || route.name === 'login') return;
+  if (route.name === 'settings' || route.name === 'server' || route.name === 'login') return;
   const s = summary();
   document.title = s.down ? `(${s.down}) Awaria · S7 Monitor` : 'S7 Monitor';
 }
@@ -123,7 +130,8 @@ subscribe((kind, payload) => {
   if (kind === 'transition') {
     toast(payload.to === 'down' ? `PADŁ: ${payload.name}${payload.reason ? ` (${payload.reason})` : ''}` : `Działa znowu: ${payload.name}`, payload.to);
   }
-  if (kind === 'check' || kind === 'me') return;
+  if (kind === 'me') { $('#nav-server')?.classList.toggle('hidden', !state.me?.host); return; }
+  if (kind === 'check') return;
   scheduleRender();
 });
 
@@ -132,6 +140,7 @@ topbar.innerHTML = `
   <span class="live" id="live" data-state="connecting" role="status"><span class="live-dot"></span><span class="live-text" id="live-text">Łączenie…</span></span>
   <nav class="nav" aria-label="Nawigacja">
     <a href="#/" data-route="dashboard" aria-label="Pulpit">${icon('home')}<span class="label">Pulpit</span></a>
+    <a href="#/server" data-route="server" aria-label="Serwer" id="nav-server" class="hidden">${icon('server')}<span class="label">Serwer</span></a>
     <a href="#/settings" data-route="settings" aria-label="Ustawienia">${icon('gear')}<span class="label">Ustawienia</span></a>
   </nav>`;
 

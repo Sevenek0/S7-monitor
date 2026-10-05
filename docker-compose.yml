@@ -11,10 +11,12 @@ services:
     environment:
       DATA_DIR: /data
       PORT: "3000"
+      S7_AGENT_SOCKET: /run/s7-agent/agent.sock   # S7 Agent na VPS-ie (zakładka „Serwer")
     ports:
       - "127.0.0.1:3000:3000"   # tylko lokalnie — publicznie wystawia nginx/Caddy
     volumes:
       - ./data:/data
+      - /run/s7-agent:/run/s7-agent
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

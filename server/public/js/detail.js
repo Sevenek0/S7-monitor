@@ -127,7 +127,7 @@ function renderLive() {
   const m = monitor(); if (!m || !body.querySelector('#d-stats')) return;
   const d = m.data || {};
   panel.querySelector('#d-name').textContent = m.name;
-  panel.querySelector('#d-sub').textContent = `${TYPE_LABEL[m.type]} · ${m.type === 'fivem' ? (d.hostname || m.target) : m.type === 'http' ? m.target : m.pteroServerId}`;
+  panel.querySelector('#d-sub').textContent = `${TYPE_LABEL[m.type]} · ${m.type === 'fivem' ? (d.hostname || m.target) : m.type === 'http' || m.type === 'service' ? m.target : m.pteroServerId}`;
   panel.querySelector('#d-pill').innerHTML = pill(m.status);
 
   const alert = body.querySelector('#d-alert');
@@ -154,7 +154,7 @@ function renderStats() {
     items.push(['Gracze teraz', m.status === 'down' ? '—' : `${d.clients ?? 0}${d.maxClients ? `/${d.maxClients}` : ''}`]);
     items.push(['Maks. graczy', s?.maxPlayers ?? '—']);
   }
-  if (m.type !== 'pterodactyl') items.push(['Śr. odpowiedź', s?.avgLatency != null ? `${s.avgLatency} ms` : '—']);
+  if (m.type !== 'pterodactyl' && m.type !== 'service') items.push(['Śr. odpowiedź', s?.avgLatency != null ? `${s.avgLatency} ms` : '—']);
   if (d.ptero) {
     items.push(['CPU teraz', d.ptero.cpu != null ? `${num(d.ptero.cpu)}%` : '—']);
     items.push(['RAM teraz', bytes(d.ptero.mem)]);
@@ -165,21 +165,22 @@ function renderStats() {
 
 function renderPower(m) {
   const el = body.querySelector('#d-power');
-  if (!m.pteroServerId) { el.innerHTML = ''; return; }
+  const isService = m.type === 'service';
+  if (!m.pteroServerId && !isService) { el.innerHTML = ''; return; }
   if (el.dataset.for === String(m.id) && el.innerHTML) {
     // tylko odśwież paski zasobów
     const rb = el.querySelector('.d-res'); if (rb) rb.innerHTML = resourceBars(m.data?.ptero);
     return;
   }
   el.dataset.for = String(m.id);
-  el.innerHTML = `<div class="block"><h3>${icon('bolt')} Zasilanie <span class="muted">Pterodactyl</span></h3>
+  el.innerHTML = `<div class="block"><h3>${icon('bolt')} Zasilanie <span class="muted">${isService ? 'usługa na VPS-ie' : 'Pterodactyl'}</span></h3>
     <div class="d-res" style="margin-bottom:12px">${resourceBars(m.data?.ptero)}</div>
     <div class="power">
       <button class="btn good" data-sig="start">${icon('play')}Start</button>
       <button class="btn" data-sig="restart">${icon('restart')}Restart</button>
       <button class="btn danger" data-sig="stop">${icon('stop')}Stop</button>
-      <button class="btn danger" data-sig="kill">${icon('bolt')}Kill</button>
-    </div><p class="muted" style="font-size:12px;margin:8px 0 0">Stop i Kill wymagają drugiego kliknięcia.</p></div>`;
+      ${isService ? `<a class="btn" href="#/server?log=${encodeURIComponent(`svc.${m.target}`)}">${icon('terminal')}Konsola</a>` : `<button class="btn danger" data-sig="kill">${icon('bolt')}Kill</button>`}
+    </div><p class="muted" style="font-size:12px;margin:8px 0 0">${isService ? 'Stop wymaga drugiego kliknięcia. Konsola pokazuje logi na żywo.' : 'Stop i Kill wymagają drugiego kliknięcia.'}</p></div>`;
   const LABEL = { start: 'Start', restart: 'Restart', stop: 'Stop', kill: 'Kill' };
   const armed = new Map();
   const send = async (btn, sig) => {
@@ -225,7 +226,13 @@ function renderInfo(m) {
     if (d.resources != null) rows.push(['Zasoby', d.resources]);
     if (d.gametype) rows.push(['Tryb', d.gametype]);
   }
-  if (d.ptero) {
+  if (m.type === 'service') {
+    rows.push(['Usługa', d.service?.unit || m.target]);
+    if (d.ptero) rows.push(['Stan', PTERO_STATE[d.ptero.state] || d.ptero.state]);
+    if (d.ptero?.uptime) rows.push(['Czas działania', duration(d.ptero.uptime)]);
+    if (d.service?.pid) rows.push(['PID', d.service.pid]);
+    if (d.service?.restarts != null) rows.push(['Automatyczne restarty', d.service.restarts]);
+  } else if (d.ptero) {
     rows.push(['Serwer Ptero', `${d.ptero.name || ''} (${m.pteroServerId})`]);
     rows.push(['Stan w panelu', PTERO_STATE[d.ptero.state] || d.ptero.state]);
     if (d.ptero.uptime) rows.push(['Czas działania', duration(d.ptero.uptime)]);
@@ -270,8 +277,8 @@ function renderHistory() {
   const base = { points: h.buckets, from: h.from, to: h.to, bucketMs: h.bucketMs };
   const add = (opts) => { const el = document.createElement('div'); wrap.appendChild(el); current.cleanups.push(mountLineChart(el, { ...base, ...opts })); };
   if (m.type === 'fivem') add({ key: 'pl', title: 'Gracze (maks. w przedziale)', fmt: (v) => num(v, 0), yMax: m.data?.maxClients || undefined });
-  if (m.type !== 'pterodactyl') add({ key: 'lat', title: 'Czas odpowiedzi', fmt: (v) => `${num(v, 0)} ms` });
-  if (m.pteroServerId) {
+  if (m.type !== 'pterodactyl' && m.type !== 'service') add({ key: 'lat', title: 'Czas odpowiedzi', fmt: (v) => `${num(v, 0)} ms` });
+  if (m.pteroServerId || m.type === 'service') {
     add({ key: 'cpu', title: 'CPU (%)', fmt: (v) => `${num(v)}%` });
     add({ key: 'mem', title: 'RAM', fmt: (v) => bytes(v), color: 'var(--series-2)' });
   }

@@ -1,10 +1,10 @@
 import express from 'express';
 
-export function pushRoutes({ push, config, ptero, store }) {
+export function pushRoutes({ push, config, ptero, host, store }) {
   const r = express.Router();
 
   r.get('/me', (req, res) => {
-    res.json({ ok: true, ptero: Boolean(ptero?.enabled), vapidPublicKey: push?.publicKey || null, pushSubscriptions: push?.count() ?? 0, monitors: store.list().length });
+    res.json({ ok: true, ptero: Boolean(ptero?.enabled), host: Boolean(host?.enabled), vapidPublicKey: push?.publicKey || null, pushSubscriptions: push?.count() ?? 0, monitors: store.list().length });
   });
 
   r.get('/push/key', (req, res) => res.json({ publicKey: push.publicKey }));

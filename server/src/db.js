@@ -4,7 +4,7 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS monitors (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   name            TEXT    NOT NULL,
-  type            TEXT    NOT NULL CHECK (type IN ('http','fivem','pterodactyl')),
+  type            TEXT    NOT NULL,
   target          TEXT    NOT NULL DEFAULT '',
   interval_s      INTEGER NOT NULL DEFAULT 30,
   fail_threshold  INTEGER NOT NULL DEFAULT 2,
@@ -57,10 +57,44 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 `;
 
+/**
+ * Starsze bazy miały w tabeli monitors ograniczenie CHECK na typ (bez 'service').
+ * SQLite nie umie go zdjąć, więc przepisujemy tabelę (typ sprawdza store.js).
+ */
+function migrate(db) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'monitors'").get();
+  if (!row?.sql?.includes('CHECK (type IN')) return;
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  db.transaction(() => {
+    db.exec(`
+      CREATE TABLE monitors_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        name            TEXT    NOT NULL,
+        type            TEXT    NOT NULL,
+        target          TEXT    NOT NULL DEFAULT '',
+        interval_s      INTEGER NOT NULL DEFAULT 30,
+        fail_threshold  INTEGER NOT NULL DEFAULT 2,
+        paused          INTEGER NOT NULL DEFAULT 0,
+        ptero_server_id TEXT,
+        expected_codes  TEXT,
+        keyword         TEXT,
+        sort            INTEGER NOT NULL DEFAULT 0,
+        created_at      INTEGER NOT NULL
+      );
+      INSERT INTO monitors_new SELECT id, name, type, target, interval_s, fail_threshold, paused, ptero_server_id, expected_codes, keyword, sort, created_at FROM monitors;
+      DROP TABLE monitors;
+      ALTER TABLE monitors_new RENAME TO monitors;
+    `);
+  })();
+  db.pragma('legacy_alter_table = OFF');
+}
+
 export function openDb(file) {
   const db = new Database(file);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
+  migrate(db);
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
   return db;

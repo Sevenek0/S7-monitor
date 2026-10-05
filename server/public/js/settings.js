@@ -5,6 +5,13 @@ import { esc, icon, pill, toast, TYPE_LABEL, isIOS, isDesktopApp } from './util.
 import { openModal, confirmDialog } from './modal.js';
 import { pushSupport, pushStatus, enablePush, disablePush, sendTestPush } from './push.js';
 
+let hostCache = null;
+async function hostServices() {
+  if (!state.me?.host) return null;
+  hostCache ||= api('/host/services').then((r) => r.services).catch((e) => { hostCache = null; throw e; });
+  return hostCache;
+}
+
 let pteroCache = null;
 async function pteroServers(force = false) {
   if (!state.me?.ptero) return null;
@@ -19,7 +26,7 @@ export function renderSettings(root, params) {
         ${state.me?.ptero ? `<button class="btn" data-act="import">${icon('download')}Import z Pterodactyla</button>` : ''}
         <button class="btn primary" data-act="add">${icon('plus')}Dodaj</button></div>
       <div id="mlist-wrap"></div>
-      ${!state.me?.ptero ? '<p class="muted" style="font-size:13px;margin:12px 0 0">Pterodactyl nie jest skonfigurowany — ustaw <code>PTERO_URL</code> i <code>PTERO_KEY</code> w pliku <code>.env</code> na serwerze, aby importować boty.</p>' : ''}
+      ${!state.me?.ptero && !state.me?.host ? '<p class="muted" style="font-size:13px;margin:12px 0 0">Pterodactyl nie jest skonfigurowany — ustaw <code>PTERO_URL</code> i <code>PTERO_KEY</code> w pliku <code>.env</code> na serwerze, aby importować boty.</p>' : ''}
     </section>
     <section class="box" id="push-box"><h2>Powiadomienia</h2><p class="desc">Dostajesz powiadomienie tylko, gdy coś padnie albo wróci do działania.</p><div id="push-ui"><span class="spinner"></span></div></section>
     <section class="box"><h2>Konto</h2><p class="desc">Zalogowano jako administrator. Sesja jest ważna 30 dni.</p>
@@ -43,7 +50,7 @@ function listHtml() {
   const monitors = [...state.monitors.values()];
   return `<div class="mlist">${monitors.length ? monitors.map((m) => `<div class="mrow" data-id="${m.id}">
           ${pill(m.status)}
-          <div class="info"><div class="n">${esc(m.name)}</div><div class="t">${esc(TYPE_LABEL[m.type])} · ${esc(m.type === 'pterodactyl' ? m.pteroServerId : m.target)} · co ${m.intervalS} s</div></div>
+          <div class="info"><div class="n">${esc(m.name)}</div><div class="t">${esc(TYPE_LABEL[m.type])} · ${esc(m.type === 'pterodactyl' ? m.pteroServerId : m.type === 'service' ? `usługa ${m.target}` : m.target)} · co ${m.intervalS} s</div></div>
           <div class="acts">
             <button class="btn small" data-act="edit">${icon('edit')}<span>Edytuj</span></button>
             <button class="btn small" data-act="pause">${icon(m.paused ? 'play' : 'pause')}<span>${m.paused ? 'Wznów' : 'Pauza'}</span></button>
@@ -126,10 +133,11 @@ function monitorForm(m = null) {
   const modal = openModal(`<h2>${m ? 'Edytuj monitor' : 'Nowy monitor'}</h2>
     <form id="mform" novalidate>
       <div class="field"><label>Typ</label><div class="segmented" id="f-type">
-        ${['http', 'fivem', 'pterodactyl'].map((t) => `<button type="button" data-type="${t}" aria-pressed="${v.type === t}">${{ http: 'Strona', fivem: 'FiveM', pterodactyl: 'Bot' }[t]}</button>`).join('')}
+        ${['http', 'fivem', 'pterodactyl', 'service'].filter((t) => t === v.type || (t === 'service' ? state.me?.host : t === 'pterodactyl' ? state.me?.ptero || !state.me?.host : true)).map((t) => `<button type="button" data-type="${t}" aria-pressed="${v.type === t}">${{ http: 'Strona', fivem: 'FiveM', pterodactyl: 'Bot (Ptero)', service: 'Usługa VPS' }[t]}</button>`).join('')}
       </div></div>
       <div class="field"><label for="f-name">Nazwa</label><input class="input" id="f-name" required maxlength="80" value="${esc(v.name || '')}" placeholder="np. Bot EMS"></div>
       <div class="field" data-for="http fivem"><label for="f-target" id="f-target-label">Adres</label><input class="input" id="f-target" value="${esc(v.target || '')}" inputmode="url" autocapitalize="off" spellcheck="false"><span class="hint" id="f-target-hint"></span></div>
+      <div class="field" data-for="service"><label for="f-svc">Usługa na serwerze</label><div id="f-svc-wrap"><input class="input" id="f-svc" value="${esc(v.type === 'service' ? v.target || '' : '')}" placeholder="np. community-bot" autocapitalize="off" spellcheck="false"></div><span class="hint">Bot lub program działający na VPS-ie jako usługa systemowa.</span></div>
       <div class="field" data-for="pterodactyl http fivem"><label for="f-ptero" id="f-ptero-label">Serwer w Pterodactylu</label><div id="f-ptero-wrap"></div><span class="hint" id="f-ptero-hint"></span></div>
       <div class="grid-2">
         <div class="field"><label for="f-int">Interwał (s)</label><input class="input" id="f-int" type="number" min="10" max="3600" inputmode="numeric" value="${esc(v.intervalS)}"></div>
@@ -167,6 +175,20 @@ function monitorForm(m = null) {
       });
     }
   };
+  const setServiceInput = async () => {
+    let list = null;
+    try { list = await hostServices(); } catch { /* agent niedostępny */ }
+    if (!list || f.querySelector('select#f-svc')) return;
+    const cur = f.querySelector('#f-svc')?.value || '';
+    f.querySelector('#f-svc-wrap').innerHTML = `<select class="input" id="f-svc"><option value="">— wybierz —</option>
+      ${list.map((s) => `<option value="${esc(s.id)}" ${s.id === cur ? 'selected' : ''}>${esc(s.label)}${s.kind === 'infra' ? '' : ` (${esc(s.unit)})`}</option>`).join('')}
+      ${cur && !list.find((s) => s.id === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)}</option>` : ''}</select>`;
+    f.querySelector('#f-svc').addEventListener('change', (e) => {
+      const s = list.find((x) => x.id === e.target.value);
+      const name = f.querySelector('#f-name');
+      if (s && !name.value) name.value = s.label;
+    });
+  };
   const sync = () => {
     f.querySelectorAll('#f-type button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.type === type)));
     f.querySelectorAll('[data-for]').forEach((el) => el.classList.toggle('hidden', !el.dataset.for.split(' ').includes(type)));
@@ -174,8 +196,8 @@ function monitorForm(m = null) {
     f.querySelector('#f-target').placeholder = type === 'fivem' ? 'http://1.2.3.4:30120' : 'https://example.com';
     f.querySelector('#f-target-hint').textContent = type === 'fivem' ? 'IP i port serwera (domyślnie 30120).' : 'Pełny adres z https://';
     const pf = f.querySelector('[data-for~="pterodactyl"]');
-    if (!state.me?.ptero && type !== 'pterodactyl') pf.classList.add('hidden');
-    setPteroInput();
+    if ((!state.me?.ptero && type !== 'pterodactyl') || type === 'service') pf.classList.add('hidden');
+    if (type === 'service') setServiceInput(); else setPteroInput();
   };
   f.querySelector('#f-type').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { type = b.dataset.type; sync(); } });
   f.querySelector('[data-a="cancel"]').addEventListener('click', () => modal.close());
@@ -184,8 +206,8 @@ function monitorForm(m = null) {
     const btn = f.querySelector('button[type="submit"]'); btn.disabled = true;
     const body = {
       name: f.querySelector('#f-name').value.trim(), type,
-      target: f.querySelector('#f-target').value.trim(),
-      pteroServerId: f.querySelector('#f-ptero')?.value.trim() || null,
+      target: type === 'service' ? f.querySelector('#f-svc').value.trim() : f.querySelector('#f-target').value.trim(),
+      pteroServerId: type === 'service' ? null : f.querySelector('#f-ptero')?.value.trim() || null,
       intervalS: Number(f.querySelector('#f-int').value), failThreshold: Number(f.querySelector('#f-thr').value),
       expectedCodes: f.querySelector('#f-codes').value.trim() || null, keyword: f.querySelector('#f-kw').value || null,
     };

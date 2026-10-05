@@ -1,0 +1,15 @@
+# S7 Agent — pomocnik S7 Monitora na VPS-ie (informacje o serwerze, usługi, logi).
+# Instaluje go deploy/install.sh. Słucha tylko na gnieździe /run/s7-agent/agent.sock.
+[Unit]
+Description=S7 Agent (pomocnik S7 Monitor)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/env node /opt/s7-monitor/agent/s7-agent.mjs
+Restart=always
+RestartSec=3
+# Grupa użytkownika "node" w kontenerze aplikacji (dostęp do gniazda).
+Environment=S7_AGENT_GID=1000
+
+[Install]
+WantedBy=multi-user.target

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # S7 Monitor — instalacja jedną komendą na VPS (Ubuntu/Debian):
-#   curl -fsSL https://raw.githubusercontent.com/Sevenek0/S7-monitor/feat/s7-monitor/deploy/install.sh | sudo bash
+#   sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Sevenek0/S7-monitor/feat/s7-monitor/deploy/install.sh)"
+#
+# Uwaga: forma "curl ... | sudo bash" zawiesza się na pytaniach przy nowszym sudo (sudo-rs, Ubuntu 25.10+),
+# dlatego skrypt uruchamiamy przez bash -c "$(curl ...)".
 #
 # Skrypt: instaluje Dockera i gita, pobiera aplikację do /opt/s7-monitor, pyta o hasło
-# i klucz Pterodactyla, uruchamia kontener i konfiguruje HTTPS:
+# i klucz Pterodactyla, instaluje S7 Agenta (zakładka „Serwer"), uruchamia kontener i konfiguruje HTTPS:
 #   - jeśli na 80/443 działa nginx (np. od Pterodactyla) → vhost + certbot,
 #   - jeśli porty są wolne → Caddy z automatycznym certyfikatem.
 # Bez domeny używa adresu <IP-z-myślnikami>.sslip.io. Można uruchamiać ponownie (aktualizacja).
@@ -22,7 +25,8 @@ die() { printf '\033[31m✘ %s\033[0m\n' "$*" >&2; exit 1; }
 ask() { local prompt="$1" def="${2:-}" ans; read -r -p "$prompt" ans </dev/tty || true; echo "${ans:-$def}"; }
 ask_secret() { local prompt="$1" ans; read -r -s -p "$prompt" ans </dev/tty || true; echo >&2; echo "$ans"; }
 
-[ "$(id -u)" = "0" ] || die "Uruchom z sudo:  curl -fsSL ... | sudo bash"
+INSTALL_CMD='sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Sevenek0/S7-monitor/feat/s7-monitor/deploy/install.sh)"'
+[ "$(id -u)" = "0" ] || die "Uruchom z sudo:  $INSTALL_CMD"
 [ -r /dev/tty ] || die "Brak terminala do zadania pytań — uruchom w normalnej sesji SSH."
 
 echo
@@ -66,6 +70,8 @@ if [ -f .env ] && grep -q '^APP_PASSWORD=.\+' .env; then
   DOMAIN="${DOMAIN:-$DEFAULT_DOMAIN}"
   EMAIL="${VAPID_SUBJECT#mailto:}"
 else
+  # Pytania wymagają klawiatury na wejściu skryptu — przy "curl | sudo bash" nowsze sudo je blokuje.
+  [ -t 0 ] || die "Nie mogę zadać pytań w tym trybie. Uruchom instalację tak:  $INSTALL_CMD"
   echo
   echo "Odpowiedz na kilka pytań (Enter = wartość w nawiasie)."
   echo
@@ -97,7 +103,21 @@ EOF
   c_ok "Zapisano $DIR/.env"
 fi
 
-# --- 4. Uruchomienie aplikacji ---------------------------------------------
+# --- 4. S7 Agent (zakładka „Serwer": informacje o VPS-ie, usługi, konsole) ---
+if ! command -v node >/dev/null; then
+  c_info "Instaluję Node.js dla S7 Agenta…"
+  apt-get update -qq && apt-get install -y -qq nodejs >/dev/null || c_warn "Nie udało się zainstalować Node.js — zakładka Serwer nie będzie działać."
+fi
+if command -v node >/dev/null && command -v systemctl >/dev/null; then
+  install -m 644 deploy/s7-agent.service /etc/systemd/system/s7-agent.service
+  systemctl daemon-reload
+  systemctl enable s7-agent >/dev/null 2>&1 || true
+  systemctl restart s7-agent
+  for _ in $(seq 1 10); do [ -S /run/s7-agent/agent.sock ] && break; sleep 0.5; done
+  if [ -S /run/s7-agent/agent.sock ]; then c_ok "S7 Agent działa"; else c_warn "S7 Agent nie wystartował — sprawdź: journalctl -u s7-agent -n 30"; fi
+fi
+
+# --- 5. Uruchomienie aplikacji ---------------------------------------------
 mkdir -p data
 c_info "Buduję i uruchamiam kontener (pierwszy raz ok. 1–3 min)…"
 if [ -n "${S7_SKIP_BUILD:-}" ]; then docker compose up -d app >/dev/null; else docker compose up -d --build app >/dev/null; fi
@@ -108,7 +128,7 @@ done
 curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 || { docker compose logs --tail 30 app; die "Aplikacja nie wystartowała (logi powyżej)."; }
 c_ok "Aplikacja działa na 127.0.0.1:3000"
 
-# --- 5. HTTPS ---------------------------------------------------------------
+# --- 6. HTTPS ---------------------------------------------------------------
 LISTEN="$(ss -tlnpH '( sport = :80 or sport = :443 )' 2>/dev/null || true)"
 if echo "$LISTEN" | grep -q nginx; then
   c_info "Wykryto nginx na 80/443 — dodaję vhost dla $DOMAIN i certyfikat (certbot)…"
@@ -144,13 +164,13 @@ else
   c_ok "Caddy uruchomiony"
 fi
 
-# --- 6. Zapora --------------------------------------------------------------
+# --- 7. Zapora --------------------------------------------------------------
 if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw allow 443/udp >/dev/null
   c_ok "Otwarto porty 80 i 443 w UFW"
 fi
 
-# --- 7. Podsumowanie --------------------------------------------------------
+# --- 8. Podsumowanie --------------------------------------------------------
 echo
 if curl -fsS --max-time 10 "https://$DOMAIN/api/health" >/dev/null 2>&1; then
   c_ok "Gotowe! S7 Monitor działa pod: https://$DOMAIN"

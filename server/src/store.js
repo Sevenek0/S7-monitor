@@ -1,7 +1,7 @@
 /**
  * Warstwa dostępu do monitorów i ich bieżącego stanu.
  */
-export const TYPES = ['http', 'fivem', 'pterodactyl'];
+export const TYPES = ['http', 'fivem', 'pterodactyl', 'service'];
 export const DEFAULT_CODES = '200-399';
 
 const PUBLIC_FIELDS = (row) => ({
@@ -68,6 +68,9 @@ export function validateMonitorInput(input, existing = null) {
     target = u.toString();
   } else if (out.type === 'fivem') {
     try { target = normalizeFivemTarget(target); } catch { throw new ValidationError('Podaj adres serwera FiveM, np. http://1.2.3.4:30120'); }
+  } else if (out.type === 'service') {
+    if (!/^[A-Za-z0-9_.@-]{1,100}$/.test(target)) throw new ValidationError('Wybierz usługę z serwera (np. community-bot)');
+    out.ptero_server_id = null;
   } else {
     if (!out.ptero_server_id) throw new ValidationError('Monitor Pterodactyl wymaga ID serwera');
     target = '';

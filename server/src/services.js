@@ -8,11 +8,13 @@ import { createRetention } from './retention.js';
 import { createPush, loadVapidKeys } from './push.js';
 import { attachNotifier } from './notifier.js';
 import { createPteroClient } from './ptero-client.js';
+import { createHostClient } from './host-client.js';
 import { createApp } from './app.js';
 import { monitorRoutes } from './routes/monitors.js';
 import { pteroRoutes } from './routes/ptero.js';
 import { pushRoutes } from './routes/push.js';
 import { eventRoutes } from './routes/events.js';
+import { hostRoutes } from './routes/host.js';
 
 /** Składa wszystkie usługi aplikacji. Używane przez index.js, dev:mock i testy. */
 export function createServices(config, overrides = {}) {
@@ -20,19 +22,20 @@ export function createServices(config, overrides = {}) {
   const store = createStore(db);
   const bus = createBus();
   const ptero = overrides.ptero || createPteroClient({ url: config.ptero.url, key: config.ptero.key });
-  const engine = createEngine({ db, store, bus, ctx: { ptero, ...(overrides.ctx || {}) } });
+  const host = overrides.host || createHostClient({ socketPath: config.agent?.socket, url: config.agent?.url });
+  const engine = createEngine({ db, store, bus, ctx: { ptero, host, ...(overrides.ctx || {}) } });
   const scheduler = createScheduler({ store, engine, tickMs: config.tickMs, concurrency: config.concurrency });
   const history = createHistory(db);
   const retention = createRetention({ db, days: config.retentionDays });
   const push = createPush({ db, vapid: loadVapidKeys(config.dataDir), subject: config.vapidSubject, sender: overrides.pushSender });
   attachNotifier({ bus, push });
 
-  const deps = { config, db, store, bus, ptero, engine, scheduler, history, push };
+  const deps = { config, db, store, bus, ptero, host, engine, scheduler, history, push };
   const events = eventRoutes({ bus, store });
   const app = createApp({
     config,
     limiter: overrides.limiter,
-    routes: [monitorRoutes(deps), pteroRoutes(deps), pushRoutes(deps), events],
+    routes: [monitorRoutes(deps), pteroRoutes(deps), pushRoutes(deps), hostRoutes(deps), events],
   });
   return { ...deps, retention, app, events,
     start() { scheduler.start(); retention.start(); },

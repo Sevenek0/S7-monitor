@@ -51,6 +51,7 @@ export function createConfig(env = process.env) {
     secret,
     tokenTtlMs: 30 * 24 * 3600 * 1000,
     ptero: { url: pteroUrl, key: env.PTERO_KEY || '', enabled: Boolean(pteroUrl && env.PTERO_KEY) },
+    agent: { socket: env.S7_AGENT_SOCKET || '', url: env.S7_AGENT_URL || '' },
     vapidSubject: env.VAPID_SUBJECT || 'mailto:admin@example.com',
     publicDir: path.join(SERVER_ROOT, 'public'),
     tickMs: int(env.TICK_MS, 5000),

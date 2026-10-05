@@ -3,7 +3,7 @@ import { ValidationError } from '../store.js';
 import { RANGES } from '../history.js';
 import { POWER_SIGNALS } from '../ptero-client.js';
 
-export function monitorRoutes({ store, engine, scheduler, history, bus, ptero }) {
+export function monitorRoutes({ store, engine, scheduler, history, bus, ptero, host }) {
   const r = express.Router();
 
   const getMonitor = (req, res) => {
@@ -88,6 +88,18 @@ export function monitorRoutes({ store, engine, scheduler, history, bus, ptero })
     if (!m) return;
     const signal = req.body?.signal;
     if (!POWER_SIGNALS.includes(signal)) return res.status(400).json({ error: 'Sygnał: start, stop, restart lub kill' });
+    if (m.type === 'service') {
+      if (signal === 'kill') return res.status(400).json({ error: 'Usługa obsługuje tylko start, stop i restart' });
+      if (!host?.enabled) return res.status(503).json({ error: 'Agent serwera nie jest skonfigurowany' });
+      console.log(`[zasilanie] ${new Date().toISOString()} ${signal.toUpperCase()} → "${m.name}" (usługa ${m.target}) z IP ${req.ip}`);
+      try {
+        await host.post(`/services/${encodeURIComponent(m.target)}/${signal}`);
+      } catch (err) {
+        return res.status(err.status === 403 || err.status === 404 ? err.status : 502).json({ error: err.message });
+      }
+      setTimeout(() => engine.check(m.id).catch(() => {}), 1500).unref?.();
+      return res.json({ ok: true });
+    }
     if (!m.pteroServerId) return res.status(400).json({ error: 'Ten monitor nie ma przypisanego serwera Pterodactyl' });
     if (!ptero?.enabled) return res.status(503).json({ error: 'Pterodactyl nie jest skonfigurowany' });
     console.log(`[zasilanie] ${new Date().toISOString()} ${signal.toUpperCase()} → "${m.name}" (${m.pteroServerId}) z IP ${req.ip}`);

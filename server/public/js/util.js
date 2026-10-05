@@ -48,7 +48,7 @@ export const timeOnly = (ts) => tf.format(ts);
 export const dayOnly = (ts) => df.format(ts);
 
 export const STATUS_LABEL = { up: 'Działa', down: 'Awaria', warn: 'Uwaga', pending: 'Oczekuje', paused: 'Pauza' };
-export const TYPE_LABEL = { http: 'Strona WWW', fivem: 'Serwer FiveM', pterodactyl: 'Bot (Pterodactyl)' };
+export const TYPE_LABEL = { http: 'Strona WWW', fivem: 'Serwer FiveM', pterodactyl: 'Bot (Pterodactyl)', service: 'Usługa na VPS-ie' };
 export const PTERO_STATE = { running: 'działa', offline: 'wyłączony', starting: 'uruchamianie', stopping: 'zatrzymywanie' };
 
 // Ikony (inline SVG, stroke = currentColor)
@@ -75,6 +75,8 @@ const P = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   logout: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>',
+  server: '<rect x="3.5" y="4" width="17" height="7" rx="1.5"/><rect x="3.5" y="13" width="17" height="7" rx="1.5"/><path d="M7 7.5v.01M7 16.5v.01"/>',
+  terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/>',
 };
 export function icon(name, cls = '') {
@@ -93,7 +95,7 @@ export function html(strings, ...vals) {
 /** Sekcja dashboardu, do której trafia monitor. */
 export function sectionOf(m) {
   if (m.type === 'fivem') return 'fivem';
-  if (m.type === 'pterodactyl') return 'bots';
+  if (m.type === 'pterodactyl' || m.type === 'service') return 'bots';
   return 'sites';
 }
 

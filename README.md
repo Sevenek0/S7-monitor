@@ -22,6 +22,7 @@ Monitoring botów Discord (Pterodactyl), stron WWW i serwera FiveM: backend na V
 10. [Bezpieczeństwo](#10-bezpieczeństwo)
 11. [Aktualizacja, kopie zapasowe, logi](#11-aktualizacja-kopie-zapasowe-logi)
 12. [Rozwiązywanie problemów](#12-rozwiązywanie-problemów)
+13. [Zakładka „Serwer": VPS, usługi i konsole](#13-zakładka-serwer-vps-usługi-i-konsole)
 
 ---
 
@@ -34,11 +35,13 @@ Monitoring botów Discord (Pterodactyl), stron WWW i serwera FiveM: backend na V
 ├─ deploy/nginx-s7monitor.conf  wariant B: vhost dla nginx + certbot
 ├─ .env.example              wzór konfiguracji
 ├─ server/                   backend: Express, SQLite, SSE, Web Push
-│  ├─ src/                   API, scheduler, checkery (http, fivem, pterodactyl), historia
+│  ├─ src/                   API, scheduler, checkery (http, fivem, pterodactyl, service), historia
 │  ├─ public/                frontend PWA (czysty JS/HTML/CSS, bez budowania)
 │  ├─ mock/                  fałszywy FiveM, Pterodactyl i strona do testów
 │  ├─ test/                  testy (node:test)
 │  └─ scripts/               generator ikon, zrzuty ekranu (Playwright)
+├─ agent/                    S7 Agent: pomocnik na VPS-ie (stan serwera, usługi, logi) — patrz rozdział 13
+├─ deploy/install.sh         instalator na VPS jedną komendą
 └─ desktop/                  aplikacja Windows (Electron + electron-builder/NSIS)
 ```
 
@@ -220,8 +223,9 @@ Uwagi:
 
 ```bash
 cd server
-npm test                 # 21 testów: auth, checkery na mockach, przejścia UP→DOWN→UP, próg,
-                         # incydenty, agregacja historii, push (mock web-push, usuwanie 404/410), API, SSE
+npm test                 # 27 testów: auth, checkery na mockach, przejścia UP→DOWN→UP, próg,
+                         # incydenty, agregacja historii, push (mock web-push, usuwanie 404/410), API, SSE,
+                         # zakładka Serwer i agent (mock), migracja bazy
 npm run dev:mock         # w drugim terminalu:
 npm run screenshots      # zrzuty PC 1440 px i iPhone 390 px → ../screenshots, wykrywa poziomy scroll
 
@@ -266,3 +270,34 @@ Katalog `data/` zawiera bazę, `secret.key` i `vapid.json`. Utrata `vapid.json` 
 | iPhone: brak przycisku „Włącz powiadomienia” | Otwórz aplikację z ikony na ekranie początkowym (nie w Safari). Wymagany jest iOS 16.4+ i HTTPS. |
 | Windows: brak powiadomień | Zainstaluj aplikację instalatorem (nie uruchamiaj z folderu) i sprawdź ustawienia powiadomień Windows. |
 | „Za dużo prób logowania” | Odczekaj 15 minut albo zrestartuj kontener. |
+
+## 13. Zakładka „Serwer": VPS, usługi i konsole
+
+Gdy aplikacja działa na tym samym VPS-ie co Twoje boty, zakładka **Serwer** pokazuje:
+
+- **stan VPS-a**: procesor, RAM, dysk (zajęte i wolne miejsce), sieć, czas działania, system, oczekujące aktualizacje i to, czy serwer czeka na restart,
+- **usługi**: boty i programy uruchomione jako usługi systemd (pliki `*.service` w `/etc/systemd/system`) oraz nginx, baza danych, Docker i SSH — ze stanem, RAM-em, CPU i przyciskami Start / Restart / Stop,
+- **konsole**: logi każdej usługi na żywo, dziennik całego systemu i logi nginx (wejścia i błędy stron),
+- **dyski i procesy** zużywające najwięcej pamięci.
+
+Bota działającego jako usługa dodajesz też jako zwykły monitor: **Ustawienia → Dodaj → Usługa VPS**. Dostaje wtedy wykresy CPU/RAM, historię, powiadomienia o awarii i przyciski zasilania.
+
+### Jak to działa
+
+Aplikacja siedzi w Dockerze i sama nie widzi systemu, więc instalator uruchamia na VPS-ie małego pomocnika, **S7 Agenta** (`agent/s7-agent.mjs`, usługa `s7-agent`). Agent:
+
+- słucha tylko na gnieździe `/run/s7-agent/agent.sock` (nie otwiera żadnego portu), a `docker-compose.yml` podłącza to gniazdo do kontenera,
+- **nie wykonuje dowolnych poleceń**: czyta stan i logi oraz robi start/stop/restart wyłącznie usług z listy. Konsole są tylko do odczytu,
+- Dockera i SSH nie da się zatrzymać z aplikacji, a nginx, bazę i PHP można tylko zrestartować.
+
+Własną listę usług i dodatkowe pliki logów możesz podać w `/etc/s7-agent.json`:
+
+```json
+{
+  "services": [{ "unit": "moj-bot.service", "label": "Mój bot" }],
+  "logs": [{ "id": "moj-log", "label": "Mój log", "file": "/var/log/moj.log" }]
+}
+```
+
+Po zmianie: `sudo systemctl restart s7-agent`. Logi agenta: `journalctl -u s7-agent -n 50`.
+

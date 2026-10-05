@@ -1,9 +1,9 @@
 // Service worker S7 Monitor: cache aplikacji (offline), Web Push, kliknięcia powiadomień.
-const VERSION = 's7-v1';
+const VERSION = 's7-v2';
 const ASSETS = [
   '/', '/index.html', '/manifest.webmanifest', '/css/app.css',
   '/js/app.js', '/js/api.js', '/js/store.js', '/js/util.js', '/js/charts.js', '/js/dashboard.js',
-  '/js/detail.js', '/js/settings.js', '/js/push.js', '/js/modal.js', '/js/desktop-bridge.js',
+  '/js/detail.js', '/js/settings.js', '/js/server.js', '/js/push.js', '/js/modal.js', '/js/desktop-bridge.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png', '/icons/badge-72.png', '/icons/favicon-32.png',
 ];
 

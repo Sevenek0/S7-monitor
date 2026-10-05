@@ -5,7 +5,7 @@ import { sparkline } from './charts.js';
 
 const SECTIONS = [
   { key: 'fivem', title: 'Serwer FiveM' },
-  { key: 'bots', title: 'Boty Discord' },
+  { key: 'bots', title: 'Boty i usługi' },
   { key: 'sites', title: 'Strony' },
 ];
 
@@ -39,7 +39,7 @@ function mainMetric(m) {
       ${m.lastLatency != null ? `<span class="extra">${esc(m.lastLatency)} ms</span>` : ''}</div>
       ${d.ptero ? resourceBars(d.ptero) : ''}`;
   }
-  if (m.type === 'pterodactyl') {
+  if (m.type === 'pterodactyl' || m.type === 'service') {
     const p = d.ptero;
     if (!p) return `<div class="metric"><span class="value muted">—</span><span class="unit">${esc(m.lastError || 'brak danych')}</span></div>`;
     return resourceBars(p) + `<div class="card-sub" style="margin-top:0">Stan: ${esc(PTERO_STATE[p.state] || p.state)}</div>`;
@@ -51,13 +51,14 @@ function mainMetric(m) {
 
 function subtitle(m) {
   if (m.type === 'fivem') return m.data?.hostname || m.target;
+  if (m.type === 'service') return `Usługa · ${m.target}`;
   if (m.type === 'pterodactyl') return m.data?.ptero?.name ? `Pterodactyl · ${m.data.ptero.name}` : `Pterodactyl · ${m.pteroServerId}`;
   try { return new URL(m.target).host; } catch { return m.target; }
 }
 
 export function card(m, selectedId) {
   const ov = state.overview?.monitors?.[m.id];
-  const key = m.type === 'fivem' ? 'pl' : m.type === 'pterodactyl' ? 'cpu' : 'lat';
+  const key = m.type === 'fivem' ? 'pl' : m.type === 'pterodactyl' || m.type === 'service' ? 'cpu' : 'lat';
   const sparkLabel = { pl: 'gracze', cpu: 'CPU', lat: 'latencja' }[key];
   const now = Date.now();
   const spark = sparkline(ov?.spark || [], key, { from: state.overview?.from ?? now - 864e5, to: now, bucketMs: state.overview?.bucketMs ?? 1800e3 });
@@ -106,7 +107,7 @@ export function renderDashboard(root, selectedId) {
   const all = [...state.monitors.values()];
   let out = installBanner() + overallBar();
   if (!all.length) {
-    out += `<div class="empty"><h2>Nic tu jeszcze nie ma</h2><p>Dodaj stronę, serwer FiveM albo zaimportuj boty z Pterodactyla.</p><a class="btn primary" href="#/settings">${icon('plus')}Dodaj monitor</a></div>`;
+    out += `<div class="empty"><h2>Nic tu jeszcze nie ma</h2><p>Dodaj stronę, serwer FiveM albo bota w ustawieniach.</p><a class="btn primary" href="#/settings">${icon('plus')}Dodaj monitor</a></div>`;
   }
   for (const s of SECTIONS) {
     const list = all.filter((m) => sectionOf(m) === s.key);
