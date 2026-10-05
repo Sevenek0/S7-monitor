@@ -1,0 +1,44 @@
+# Buduje instalator Windows (.exe) i publikuje go jako GitHub Release.
+name: Aplikacja Windows
+
+on:
+  push:
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: S7-Monitor-Setup
+          path: desktop/dist/*.exe
+      - name: Publikacja w Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="desktop-v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.exe --clobber
+          else
+            gh release create "$TAG" dist/*.exe --target "$GITHUB_SHA" \
+              --title "S7 Monitor dla Windows $VERSION" \
+              --notes "Pobierz plik S7-Monitor-Setup-$VERSION.exe i uruchom. Windows SmartScreen: Więcej informacji → Uruchom mimo to."
+          fi
