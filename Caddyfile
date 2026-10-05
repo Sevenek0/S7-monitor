@@ -1,0 +1,8 @@
+# Wariant A: Caddy sam pobiera i odnawia certyfikat Let's Encrypt dla $DOMAIN.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# SSE (/api/events) — wysyłaj zdarzenia od razu, bez buforowania
+		flush_interval -1
+	}
+}

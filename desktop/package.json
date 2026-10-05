@@ -1,0 +1,63 @@
+{
+  "name": "s7-monitor-desktop",
+  "productName": "S7 Monitor",
+  "version": "1.0.0",
+  "description": "S7 Monitor — aplikacja Windows (tray, powiadomienia)",
+  "author": "S7",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "icons": "node ../server/scripts/make-icons.js",
+    "dist": "electron-builder --win nsis --x64",
+    "dist:dir": "electron-builder --win dir --x64",
+    "test:smoke": "node test/smoke.mjs"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "pl.s7.monitor",
+    "productName": "S7 Monitor",
+    "copyright": "S7",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "config.js",
+      "setup.html",
+      "offline.html",
+      "assets/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "S7-Monitor-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "S7 Monitor",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "runAfterFinish": true,
+      "language": "1045"
+    },
+    "publish": null
+  }
+}

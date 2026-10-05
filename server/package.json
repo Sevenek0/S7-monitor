@@ -1,0 +1,24 @@
+{
+  "name": "s7-monitor-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "S7 Monitor — backend, API, SSE i PWA",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev:mock": "node mock/dev-mock.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "icons": "node scripts/make-icons.js",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "express": "^4.21.2",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

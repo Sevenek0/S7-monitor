@@ -1,0 +1,41 @@
+# S7 Monitor
+#   docker compose up -d                    → aplikacja na 127.0.0.1:3000 (za nginx — wariant B)
+#   docker compose --profile caddy up -d    → + Caddy z automatycznym HTTPS na 80/443 (wariant A)
+services:
+  app:
+    build: .
+    image: s7-monitor:latest
+    container_name: s7-monitor
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"   # tylko lokalnie — publicznie wystawia nginx/Caddy
+    volumes:
+      - ./data:/data
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    container_name: s7-caddy
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN:?Ustaw DOMAIN w pliku .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
